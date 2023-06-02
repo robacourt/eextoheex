@@ -33,7 +33,7 @@ defmodule EexToHeex do
            }) do
       toks = fudge_tokens(toks)
 
-      attrs = find_attrs(false, false, [], toks)
+      attrs = find_attrs(false, false, [], toks) |> IO.inspect(label: "attrs")
 
       attr_reps =
         Enum.flat_map(attrs, fn {quoted, subs} -> attr_replacements(str, quoted, subs) end)
@@ -136,9 +136,7 @@ defmodule EexToHeex do
     to_replace = String.slice(b, 0, String.length(from))
 
     if to_replace != from do
-      raise "Attempted to replace:\n\n#{from}\n\nbut found:\n\n#{to_replace}\n\nat position #{
-              position
-            }"
+      raise "Attempted to replace:\n\n#{from}\n\nbut found:\n\n#{to_replace}\n\nat position #{position}"
     end
 
     a <> String.replace_prefix(b, from, to)
@@ -292,9 +290,7 @@ defmodule EexToHeex do
         end
       )
 
-    "<.form let={#{Macro.to_string(f)}} for=#{brace_wrap(Macro.to_string(changeset))} url=#{
-      brace_wrap(Macro.to_string(url))
-    }#{extras}>"
+    "<.form let={#{Macro.to_string(f)}} for=#{brace_wrap(Macro.to_string(changeset))} url=#{brace_wrap(Macro.to_string(url))}#{extras}>"
   end
 
   defp brace_wrap(s = "\"" <> _) do
@@ -309,7 +305,7 @@ defmodule EexToHeex do
          inside_tag?,
          just_subbed?,
          accum,
-         [{:text, _, _, txt}, e = {:expr, _, _, '=', _contents} | rest]
+         [{:text, _, _, txt}, e = {:expr, line, col, '=', contents} | rest]
        ) do
     txt = to_string(txt)
 
@@ -347,7 +343,17 @@ defmodule EexToHeex do
           )
 
         _ ->
-          find_attrs(inside_tag?, _just_subbed? = false, accum, rest)
+          case Code.string_to_quoted(contents) do
+            {:ok, {:if, _, [expression, [do: attribute]]}} when is_binary(attribute) ->
+              subs = [
+                {{:expr, line, col, '=', expression |> Macro.to_string() |> to_charlist}, "", ""}
+              ]
+
+              find_attrs(inside_tag?, _just_subbed? = false, [{"<%=", subs} | accum], rest)
+
+            _ ->
+              find_attrs(inside_tag?, _just_subbed? = false, accum, rest)
+          end
       end
     else
       find_attrs(inside_tag?, _just_subbed? = false, accum, rest)

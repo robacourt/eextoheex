@@ -5,6 +5,18 @@ defmodule EexToHeexTest do
   require Logger
 
   describe "eex_to_heex/1" do
+    test "replaces optional attributes" do
+      input_templ = """
+      <button <%= if x == y, do: "disabled" %>></button>
+      """
+
+      out_templ = """
+      <button disabled={ x == y }></button>
+      """
+
+      assert {:ok, out_templ} == EexToHeex.eex_to_heex(input_templ)
+    end
+
     test "plain html comes back unmodified" do
       input_templ = """
       <div class="class">
